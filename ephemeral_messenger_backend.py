@@ -1,3 +1,6 @@
+import os
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -21,7 +24,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 SECRET_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_123456789"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-DATABASE_URL = "sqlite:///./ephemeral_messenger.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ephemeral_messenger.db")
 DEFAULT_BURN_SECONDS = 10
 
 INVITE_CODES = {
