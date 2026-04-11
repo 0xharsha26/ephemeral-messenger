@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ephemeral Messenger - Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+
+    body {
+      background: radial-gradient(circle at top, #1e1b4b, #0b1220);
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border-radius: 10px;
+      border: 1px solid #374151;
+      background: #0f172a;
+      color: white;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #8B5CF6;
+      box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+    }
+
+    button {
+      width: 100%;
+      padding: 12px 14px;
+      border: none;
+      border-radius: 10px;
+      background: #8B5CF6;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #7C3AED;
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
+    }
+
+    .error {
+      color: #f87171;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Ephemeral Messenger</h1>
+    <p>Login to your private disappearing-message system</p>
+
+    <input id="username" placeholder="Username" />
+    <input id="password" type="password" placeholder="Password" />
+    <button onclick="login()">Login</button>
+
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    async function login() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const errorBox = document.getElementById("error");
+      errorBox.textContent = "";
+
+      try {
+        const res = await fetch(`${window.location.origin}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorBox.textContent = data.detail || "Login failed";
+          return;
+        }
+
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("username", username);
+        window.location.href = "index.html";
+      } catch (err) {
+        errorBox.textContent = "Could not connect to server";
+      }
+    }
+  </script>
+</body>
+</html>

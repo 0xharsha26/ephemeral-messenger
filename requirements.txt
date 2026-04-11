@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+sqlmodel
+python-jose
+pwdlib[argon2]
