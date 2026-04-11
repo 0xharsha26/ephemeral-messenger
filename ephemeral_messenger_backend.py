@@ -1,8 +1,7 @@
 from __future__ import annotations
-
-import os
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Generator, Optional
@@ -279,7 +278,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ephemeral Messenger MVP", lifespan=lifespan)
-
+app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -289,10 +288,9 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root() -> dict:
-    return {"message": "Ephemeral Messenger API is running"}
-
+@app.get("/", include_in_schema=False)
+def home():
+    return RedirectResponse(url="/app/login.html")
 
 @app.post("/auth/register", response_model=UserOut)
 def register(payload: RegisterRequest, session: Session = Depends(get_session)) -> User:
