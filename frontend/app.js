@@ -69,12 +69,12 @@ function connectWebSocket() {
   if (!currentUserId) return;
 
   const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/${currentUserId}`);
+  socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/${currentUserId}`);
 
   socket.onopen = () => {
     setStatus("Realtime connection active");
-    if (pingInterval) clearInterval(pingInterval);
 
+    if (pingInterval) clearInterval(pingInterval);
     pingInterval = setInterval(() => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send("ping");
@@ -91,23 +91,23 @@ socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws/${currentUser
         await loadInbox();
       }
 
-      // Do NOT refresh immediately on message_read,
-      // or decrypted plaintext will disappear from the UI.
       if (data.type === "message_read") {
         setStatus("Message opened. Burn countdown started.");
       }
     } catch {
-      // ignore malformed ws messages
+      // ignore non-json websocket messages like ping/pong noise
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
+    console.log("WebSocket closed:", event);
     setStatus("Realtime disconnected. Retrying...");
     if (pingInterval) clearInterval(pingInterval);
     setTimeout(connectWebSocket, 3000);
   };
 
-  socket.onerror = () => {
+  socket.onerror = (event) => {
+    console.error("WebSocket error:", event);
     setStatus("Realtime error", true);
   };
 }

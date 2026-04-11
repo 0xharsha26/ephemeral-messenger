@@ -1,1 +1,1 @@
-web: python -m uvicorn ephemeral_messenger_backend:app --host 0.0.0.0 --port $PORT
+web: python -m uvicorn ephemeral_messenger_backend:app --host 0.0.0.0 --port $PORT --proxy-headers
