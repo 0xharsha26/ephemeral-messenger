@@ -4,6 +4,11 @@ const username = localStorage.getItem("username");
 let currentUserId = null;
 let socket = null;
 let pingInterval = null;
+let inboxRefreshInterval = null;
+let countdownInterval = null;
+
+// Keeps decrypted text visible even after auto-refresh
+const decryptedCache = {};
 
 if (!username) {
   window.location.href = "login.html";
@@ -16,6 +21,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadCurrentUser();
   await loadInbox();
   connectWebSocket();
+  startAutoInboxRefresh();
+  startCountdownTicker();
 });
 
 function setStatus(message, isError = false) {
@@ -29,6 +36,8 @@ function setStatus(message, isError = false) {
 function logout() {
   if (socket) socket.close();
   if (pingInterval) clearInterval(pingInterval);
+  if (inboxRefreshInterval) clearInterval(inboxRefreshInterval);
+  if (countdownInterval) clearInterval(countdownInterval);
 
   localStorage.removeItem("username");
   localStorage.removeItem("userId");
@@ -98,6 +107,7 @@ function connectWebSocket() {
 
       if (data.type === "message_read") {
         setStatus("Message opened. Burn countdown started.");
+        await loadInbox();
       }
     } catch {
       // Ignore non-json websocket messages.
@@ -115,6 +125,50 @@ function connectWebSocket() {
   socket.onerror = () => {
     setStatus("Realtime error", true);
   };
+}
+
+function startAutoInboxRefresh() {
+  if (inboxRefreshInterval) clearInterval(inboxRefreshInterval);
+
+  inboxRefreshInterval = setInterval(async () => {
+    await loadInbox(false);
+  }, 5000);
+}
+
+function startCountdownTicker() {
+  if (countdownInterval) clearInterval(countdownInterval);
+
+  countdownInterval = setInterval(async () => {
+    const countdownElements = document.querySelectorAll("[data-burn-at]");
+    let shouldCleanup = false;
+
+    countdownElements.forEach(el => {
+      const burnAt = new Date(el.dataset.burnAt).getTime();
+      const now = Date.now();
+      const remainingMs = burnAt - now;
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (remainingSeconds <= 0) {
+        el.textContent = "Destroying...";
+        shouldCleanup = true;
+      } else {
+        el.textContent = `Self-destructs in ${remainingSeconds}s`;
+      }
+    });
+
+    if (shouldCleanup) {
+      await cleanupExpiredMessages();
+      await loadInbox(false);
+    }
+  }, 1000);
+}
+
+async function cleanupExpiredMessages() {
+  try {
+    await fetch(`${API_BASE}/maintenance/cleanup`, { method: "POST" });
+  } catch {
+    // ignore cleanup errors
+  }
 }
 
 function toBase64(bytes) {
@@ -211,7 +265,7 @@ async function decryptMessage(ciphertextB64, ivB64, saltB64, passphrase) {
   return decoder.decode(plaintextBuffer);
 }
 
-async function loadInbox() {
+async function loadInbox(showStatus = true) {
   try {
     const data = await apiFetch(`${API_BASE}/messages/inbox`);
     const container = document.getElementById("messages");
@@ -228,18 +282,37 @@ async function loadInbox() {
       div.className = "message-card";
       div.dataset.messageId = msg.id;
 
-      const burnInfo = msg.status === "burning" && msg.burn_at
-        ? `<div class="meta burning">Burning until: ${new Date(msg.burn_at).toLocaleTimeString()}</div>`
-        : `<div class="meta">Status: Encrypted message received</div>`;
+      let burnInfo = `<div class="meta">Status: Encrypted message received</div>`;
+
+      if (msg.status === "burning" && msg.burn_at) {
+        const burnAt = new Date(msg.burn_at).getTime();
+        const remainingSeconds = Math.max(0, Math.ceil((burnAt - Date.now()) / 1000));
+
+        burnInfo = `
+          <div class="meta burning" data-burn-at="${msg.burn_at}">
+            Self-destructs in ${remainingSeconds}s
+          </div>
+        `;
+      }
+
+      const cachedPlaintext = decryptedCache[msg.id];
 
       div.innerHTML = `
         <p><strong>From:</strong> ${msg.sender_username}</p>
         ${burnInfo}
-        <button onclick="readMessage(${msg.id}, ${msg.burn_after_seconds}, this)">Open & Decrypt</button>
+        ${
+          cachedPlaintext
+            ? `<div class="plaintext"><strong>Decrypted message:</strong><br>${escapeHtml(cachedPlaintext)}</div>`
+            : `<button onclick="readMessage(${msg.id}, ${msg.burn_after_seconds}, this)">Open & Decrypt</button>`
+        }
       `;
 
       container.appendChild(div);
     });
+
+    if (showStatus) {
+      setStatus("Inbox refreshed");
+    }
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -304,6 +377,8 @@ async function readMessage(id, burnSeconds, buttonEl) {
       sharedSecret
     );
 
+    decryptedCache[id] = plaintext;
+
     const card = buttonEl.closest(".message-card");
     if (!card) return;
 
@@ -316,8 +391,7 @@ async function readMessage(id, burnSeconds, buttonEl) {
 
     card.appendChild(plainDiv);
 
-    buttonEl.disabled = true;
-    buttonEl.textContent = "Decrypted";
+    buttonEl.remove();
 
     await apiFetch(`${API_BASE}/messages/${id}/read`, {
       method: "POST"
@@ -325,13 +399,7 @@ async function readMessage(id, burnSeconds, buttonEl) {
 
     setStatus(`Message decrypted. Burn timer started for ${burnSeconds} seconds.`);
 
-    setTimeout(async () => {
-      try {
-        await fetch(`${API_BASE}/maintenance/cleanup`, { method: "POST" });
-      } catch {}
-
-      await loadInbox();
-    }, (burnSeconds + 1) * 1000);
+    await loadInbox(false);
   } catch (err) {
     setStatus("Decrypt failed. Wrong secret or corrupted message.", true);
   }
