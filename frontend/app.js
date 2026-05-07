@@ -23,7 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadInbox();
   connectWebSocket();
   startAutoInboxRefresh();
-  startCountdownTicker();
+  //startCountdownTicker();
 });
 
 function setStatus(message, isError = false) {
@@ -286,12 +286,8 @@ async function loadInbox(showStatus = true) {
       let burnInfo = `<div class="meta">Status: Encrypted message received</div>`;
 
       if (msg.status === "burning" && msg.burn_at) {
-        burnInfo = `
-          <div class="meta burning" data-message-id="${msg.id}">
-            Self-destructing...
-          </div>
-        `;
-      }
+        burnInfo = `<div class="meta burning">Self-destruct timer active</div>`;
+}
 
       const cachedPlaintext = decryptedCache[msg.id];
 
@@ -391,9 +387,17 @@ async function readMessage(id, burnSeconds, buttonEl) {
 
     buttonEl.remove();
 
-    await apiFetch(`${API_BASE}/messages/${id}/read`, {
-      method: "POST"
-    });
+    setStatus(`Message decrypted. It will self-destruct in ${burnSeconds} seconds.`);
+
+    setTimeout(async () => {
+      delete decryptedCache[id];
+
+      try {
+        await fetch(`${API_BASE}/maintenance/cleanup`, { method: "POST" });
+      } catch {}
+
+      await loadInbox(false);
+    }, (burnSeconds + 1) * 1000);
 
     setStatus(`Message decrypted. Burn timer started for ${burnSeconds} seconds.`);
 
