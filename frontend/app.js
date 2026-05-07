@@ -132,7 +132,7 @@ function startAutoInboxRefresh() {
 
   inboxRefreshInterval = setInterval(async () => {
     await loadInbox(false);
-  }, 5000);
+  }, 1000);
 }
 
 function startCountdownTicker() {

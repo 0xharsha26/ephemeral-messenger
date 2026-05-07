@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -205,11 +206,32 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+async def cleanup_loop() -> None:
+    while True:
+        try:
+            with Session(engine) as session:
+                deleted = delete_expired_messages(session)
+                if deleted:
+                    print(f"Auto-cleanup deleted {deleted} expired message(s)")
+        except Exception as exc:
+            print(f"Auto-cleanup error: {exc}")
+
+        await asyncio.sleep(1)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
-    yield
+
+    cleanup_task = asyncio.create_task(cleanup_loop())
+
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Ephemeral Messenger MVP", lifespan=lifespan)
