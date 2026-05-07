@@ -132,7 +132,7 @@ function startAutoInboxRefresh() {
 
   inboxRefreshInterval = setInterval(async () => {
     await loadInbox(false);
-  }, 1000);
+  }, 3000);
 }
 
 function startCountdownTicker() {
@@ -146,9 +146,12 @@ function startCountdownTicker() {
       const burnAt = new Date(el.dataset.burnAt).getTime();
       const now = Date.now();
       const remainingMs = burnAt - now;
-      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      const remainingSeconds = Math.max(
+        0,
+        Math.floor((burnAt - Date.now()) / 1000)
+      );
 
-      if (remainingSeconds <= 0) {
+      if (remainingSeconds < 0) {
         el.textContent = "Destroying...";
         shouldCleanup = true;
       } else {
