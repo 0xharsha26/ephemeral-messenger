@@ -9,6 +9,7 @@ let countdownInterval = null;
 
 // Keeps decrypted text visible even after auto-refresh
 const decryptedCache = {};
+const localBurnDeadlines = {};
 
 if (!username) {
   window.location.href = "login.html";
@@ -139,30 +140,27 @@ function startCountdownTicker() {
   if (countdownInterval) clearInterval(countdownInterval);
 
   countdownInterval = setInterval(async () => {
-    const countdownElements = document.querySelectorAll("[data-burn-at]");
-    let shouldCleanup = false;
+    const countdownElements = document.querySelectorAll("[data-message-id]");
 
-    countdownElements.forEach(el => {
-      const burnAt = new Date(el.dataset.burnAt).getTime();
-      const now = Date.now();
-      const remainingMs = burnAt - now;
-      const remainingSeconds = Math.max(
-        0,
-        Math.floor((burnAt - Date.now()) / 1000)
-      );
+    countdownElements.forEach(async el => {
+      const messageId = el.dataset.messageId;
+      const deadline = localBurnDeadlines[messageId];
 
-      if (remainingSeconds < 0) {
+      if (!deadline) return;
+
+      const remainingMs = deadline - Date.now();
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      el.textContent = `Self-destructs in ${remainingSeconds}s`;
+
+      if (remainingSeconds <= 0) {
         el.textContent = "Destroying...";
-        shouldCleanup = true;
-      } else {
-        el.textContent = `Self-destructs in ${remainingSeconds}s`;
+        delete decryptedCache[messageId];
+        delete localBurnDeadlines[messageId];
+
+        await loadInbox(false);
       }
     });
-
-    if (shouldCleanup) {
-      await cleanupExpiredMessages();
-      await loadInbox(false);
-    }
   }, 1000);
 }
 
@@ -288,12 +286,9 @@ async function loadInbox(showStatus = true) {
       let burnInfo = `<div class="meta">Status: Encrypted message received</div>`;
 
       if (msg.status === "burning" && msg.burn_at) {
-        const burnAt = new Date(msg.burn_at).getTime();
-        const remainingSeconds = Math.max(0, Math.ceil((burnAt - Date.now()) / 1000));
-
         burnInfo = `
-          <div class="meta burning" data-burn-at="${msg.burn_at}">
-            Self-destructs in ${remainingSeconds}s
+          <div class="meta burning" data-message-id="${msg.id}">
+            Self-destructing...
           </div>
         `;
       }
@@ -381,7 +376,7 @@ async function readMessage(id, burnSeconds, buttonEl) {
     );
 
     decryptedCache[id] = plaintext;
-
+    localBurnDeadlines[id] = Date.now() + burnSeconds * 1000;
     const card = buttonEl.closest(".message-card");
     if (!card) return;
 
