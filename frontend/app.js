@@ -1,12 +1,11 @@
 const API_BASE = window.location.origin;
-const token = localStorage.getItem("token");
 const username = localStorage.getItem("username");
 
 let currentUserId = null;
 let socket = null;
 let pingInterval = null;
 
-if (!token) {
+if (!username) {
   window.location.href = "login.html";
 }
 
@@ -22,6 +21,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 function setStatus(message, isError = false) {
   const status = document.getElementById("status");
   if (!status) return;
+
   status.textContent = message;
   status.style.color = isError ? "#f87171" : "#9ca3af";
 }
@@ -29,18 +29,21 @@ function setStatus(message, isError = false) {
 function logout() {
   if (socket) socket.close();
   if (pingInterval) clearInterval(pingInterval);
-  localStorage.removeItem("token");
+
   localStorage.removeItem("username");
+  localStorage.removeItem("userId");
+
   window.location.href = "login.html";
 }
 
 async function apiFetch(url, options = {}) {
   const headers = {
-    "Authorization": "Bearer " + token,
+    "X-Username": username,
     ...(options.headers || {})
   };
 
   const res = await fetch(url, { ...options, headers });
+
   let data = null;
 
   try {
@@ -60,6 +63,7 @@ async function loadCurrentUser() {
   try {
     const data = await apiFetch(`${API_BASE}/users/me/id`);
     currentUserId = data.id;
+    localStorage.setItem("userId", data.id);
   } catch (err) {
     setStatus(err.message, true);
   }
@@ -75,6 +79,7 @@ function connectWebSocket() {
     setStatus("Realtime connection active");
 
     if (pingInterval) clearInterval(pingInterval);
+
     pingInterval = setInterval(() => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send("ping");
@@ -95,37 +100,41 @@ function connectWebSocket() {
         setStatus("Message opened. Burn countdown started.");
       }
     } catch {
-      // ignore non-json websocket messages like ping/pong noise
+      // Ignore non-json websocket messages.
     }
   };
 
-  socket.onclose = (event) => {
-    console.log("WebSocket closed:", event);
+  socket.onclose = () => {
     setStatus("Realtime disconnected. Retrying...");
+
     if (pingInterval) clearInterval(pingInterval);
+
     setTimeout(connectWebSocket, 3000);
   };
 
-  socket.onerror = (event) => {
-    console.error("WebSocket error:", event);
+  socket.onerror = () => {
     setStatus("Realtime error", true);
   };
 }
 
 function toBase64(bytes) {
   let binary = "";
+
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
+
   return btoa(binary);
 }
 
 function fromBase64(base64) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
+
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
+
   return bytes;
 }
 
@@ -159,13 +168,17 @@ async function deriveKeyFromPassphrase(passphrase, saltBytes) {
 
 async function encryptMessage(plaintext, passphrase) {
   const encoder = new TextEncoder();
+
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
   const key = await deriveKeyFromPassphrase(passphrase, salt);
 
   const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    {
+      name: "AES-GCM",
+      iv
+    },
     key,
     encoder.encode(plaintext)
   );
@@ -179,6 +192,7 @@ async function encryptMessage(plaintext, passphrase) {
 
 async function decryptMessage(ciphertextB64, ivB64, saltB64, passphrase) {
   const decoder = new TextDecoder();
+
   const ciphertext = fromBase64(ciphertextB64);
   const iv = fromBase64(ivB64);
   const salt = fromBase64(saltB64);
@@ -186,7 +200,10 @@ async function decryptMessage(ciphertextB64, ivB64, saltB64, passphrase) {
   const key = await deriveKeyFromPassphrase(passphrase, salt);
 
   const plaintextBuffer = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
+    {
+      name: "AES-GCM",
+      iv
+    },
     key,
     ciphertext
   );
@@ -198,6 +215,7 @@ async function loadInbox() {
   try {
     const data = await apiFetch(`${API_BASE}/messages/inbox`);
     const container = document.getElementById("messages");
+
     container.innerHTML = "";
 
     if (!Array.isArray(data) || data.length === 0) {
@@ -228,7 +246,7 @@ async function loadInbox() {
 }
 
 async function sendMessage() {
-  const to = document.getElementById("to").value.trim();
+  const to = document.getElementById("to").value.trim().toLowerCase();
   const msg = document.getElementById("msg").value.trim();
   const burn = parseInt(document.getElementById("burn").value, 10);
   const sharedSecret = document.getElementById("sharedSecret").value;
@@ -264,6 +282,7 @@ async function sendMessage() {
 
 async function readMessage(id, burnSeconds, buttonEl) {
   const sharedSecret = prompt("Enter shared secret to decrypt this message:");
+
   if (!sharedSecret) {
     setStatus("Decryption canceled", true);
     return;
@@ -293,7 +312,8 @@ async function readMessage(id, burnSeconds, buttonEl) {
 
     const plainDiv = document.createElement("div");
     plainDiv.className = "plaintext";
-    plainDiv.innerHTML = `<strong>Decrypted message:</strong><br>${plaintext}`;
+    plainDiv.innerHTML = `<strong>Decrypted message:</strong><br>${escapeHtml(plaintext)}`;
+
     card.appendChild(plainDiv);
 
     buttonEl.disabled = true;
@@ -309,10 +329,16 @@ async function readMessage(id, burnSeconds, buttonEl) {
       try {
         await fetch(`${API_BASE}/maintenance/cleanup`, { method: "POST" });
       } catch {}
+
       await loadInbox();
     }, (burnSeconds + 1) * 1000);
-
   } catch (err) {
     setStatus("Decrypt failed. Wrong secret or corrupted message.", true);
   }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }

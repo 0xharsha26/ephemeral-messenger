@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ephemeral Messenger - Login</title>
+  <title>Ephemeral Messenger</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
 
@@ -18,7 +18,7 @@
 
     .card {
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
       background: #111827;
       border: 1px solid #1f2937;
       border-radius: 16px;
@@ -69,6 +69,13 @@
       box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
     }
 
+    .hint {
+      margin-top: 14px;
+      color: #9ca3af;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
     .error {
       color: #f87171;
       margin-top: 12px;
@@ -79,38 +86,45 @@
 <body>
   <div class="card">
     <h1>Ephemeral Messenger</h1>
-    <p>Login to your private disappearing-message system</p>
+    <p>Enter your name to start chatting instantly</p>
 
-    <input id="username" placeholder="Username" />
-    <input id="password" type="password" placeholder="Password" />
-    <button onclick="login()">Login</button>
+    <input id="username" placeholder="Your name, e.g. harsha" />
+    <button onclick="enterChat()">Enter Chat</button>
+
+    <div class="hint">
+      Use only letters, numbers, underscore, or hyphen. No password required.
+    </div>
 
     <div class="error" id="error"></div>
   </div>
 
   <script>
-    async function login() {
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value.trim();
+    async function enterChat() {
+      const username = document.getElementById("username").value.trim().toLowerCase();
       const errorBox = document.getElementById("error");
       errorBox.textContent = "";
 
+      if (!username) {
+        errorBox.textContent = "Enter your name";
+        return;
+      }
+
       try {
-        const res = await fetch(`${window.location.origin}/auth/login`, {
+        const res = await fetch(`${window.location.origin}/guest/enter`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          errorBox.textContent = data.detail || "Login failed";
+          errorBox.textContent = data.detail || "Could not enter chat";
           return;
         }
 
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("username", username);
+        localStorage.setItem("username", data.username);
+        localStorage.setItem("userId", data.id);
         window.location.href = "index.html";
       } catch (err) {
         errorBox.textContent = "Could not connect to server";

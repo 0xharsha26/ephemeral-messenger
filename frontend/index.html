@@ -32,7 +32,7 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
 
-    h2, h3 {
+    h2 {
       margin-bottom: 14px;
     }
 
@@ -111,6 +111,11 @@
       box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
     }
 
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .secondary {
       background: #1f2937;
       color: #e5e7eb;
@@ -146,11 +151,13 @@
     }
 
     .plaintext {
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: 10px;
-    background: rgba(139, 92, 246, 0.08);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(139, 92, 246, 0.08);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      line-height: 1.5;
+      white-space: pre-wrap;
     }
 
     @media (max-width: 860px) {
@@ -166,9 +173,9 @@
       <div class="topbar">
         <div>
           <h2>Inbox</h2>
-          <div class="sub">Logged in as <span id="currentUser"></span></div>
+          <div class="sub">Chatting as <span id="currentUser"></span></div>
         </div>
-        <button class="secondary" onclick="logout()">Logout</button>
+        <button class="secondary" onclick="logout()">Exit</button>
       </div>
 
       <div id="messages" class="message-list"></div>
@@ -179,7 +186,7 @@
       <div class="sub">Messages are encrypted in the browser before sending</div>
 
       <div class="row">
-        <input id="to" placeholder="Recipient username" />
+        <input id="to" placeholder="Recipient name, e.g. yash" />
       </div>
 
       <div class="row">
